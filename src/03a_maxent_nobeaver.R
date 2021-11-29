@@ -30,9 +30,8 @@ min(pointdata$LAT)
 ext <- extent(-1770000,-1140000,400000,1600000)
 
 #list all the files that we have unzipped (pulls out the .tif files)
-files <- list.files(path ='./Data_112821/Maxent_Raster_SameExtent/Maxent_Raster_SameExtent', pattern='*.tif$',all.files = TRUE, full.names = TRUE)
+files <- list.files(path ='./Data_112821/Maxent_Raster_SameExtent_NoBeaver/Maxent_Raster_SameExtent_NoBeaver', pattern='*.tif$',all.files = TRUE, full.names = TRUE)
 
-#there should be 14 variables
 files
 
 #load the files
@@ -70,7 +69,7 @@ predictors_final <- subset(predictors, names(predictors_final_list))
 annu_velo_final <- projectRaster(predictors_final$annu_velo, crs = projection)
 Aug_temp_avg_final <- projectRaster(predictors_final$Aug_temp_avg, crs=projection)
 brockdepmin_final <- projectRaster(predictors_final$brockdepmin, crs = projection)
-Dam_CompSz_final <- projectRaster(predictors_final$Dam_CompSz, crs=projection)
+frag3to10_final <- projectRaster(predictors_final$frag3to10, crs=projection)
 fraggt10_final <- projectRaster(predictors_final$fraggt10, crs=projection)
 ksat_avg_final <- projectRaster(predictors_final$ksat_avg, crs = projection)
 LandUse_final <- projectRaster(predictors_final$LandUse, crs=projection)
@@ -79,7 +78,7 @@ slope_final <- projectRaster(predictors_final$slope, crs=projection)
 VC_final <- projectRaster(predictors_final$Valley_Con, crs=projection)
 
 #once done cropping and reprojecting put into raster stack
-predictors_maxent <- stack(annu_velo_final,Aug_temp_avg_final,brockdepmin_final,Dam_CompSz_final,fraggt10_final,ksat_avg_final,LandUse_final,MAXELEVSMO_final,slope_final,VC_final)
+predictors_maxent <- stack(annu_velo_final,Aug_temp_avg_final,brockdepmin_final,frag3to10_final,fraggt10_final,ksat_avg_final,LandUse_final,MAXELEVSMO_final,slope_final,VC_final)
 
 
 #next up is to remove any points with NA predictor variable values.
@@ -114,7 +113,7 @@ model <- maxent(x=predictors_maxent, p=pointdata, factors='Valley_Con', args=c(
   'askoverwrite=false',
   'replicates=10',
   'replicatetype=crossvalidate'),
-  path = './outputs/maxent_outputs_all')
+  path = './outputs/maxent_outputs_NoBeaver')
 
 #threads = 4 was used to match 4 core of my home computer
 #defaultprevalence=0.5 used but unsure if correct
@@ -140,5 +139,5 @@ predict_all <- predict(predictors_maxent, model_5, progress = 'text')
 plot(predict_all)
 
 #write the maxent model and the raster
-saveRDS(model, file = "./outputs/model_all.RDS")
-saveRDS(predict_all, file = './outputs/model_all_predict.RDS')
+saveRDS(model, file = "./outputs/model_nobeaver.RDS")
+saveRDS(predict_all, file = './outputs/model_nobeaver_predict.RDS')

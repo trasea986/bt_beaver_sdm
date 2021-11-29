@@ -30,9 +30,8 @@ min(pointdata$LAT)
 ext <- extent(-1770000,-1140000,400000,1600000)
 
 #list all the files that we have unzipped (pulls out the .tif files)
-files <- list.files(path ='./Data_112821/Maxent_Raster_SameExtent/Maxent_Raster_SameExtent', pattern='*.tif$',all.files = TRUE, full.names = TRUE)
+files <- list.files(path ='./Data_112821/Maxent_Raster_SameExtent_OnlyBeaver/Maxent_Raster_SameExtent_OnlyBeaver', pattern='*.tif$',all.files = TRUE, full.names = TRUE)
 
-#there should be 14 variables
 files
 
 #load the files
@@ -54,32 +53,17 @@ extracted_points <- as.data.frame(extracted_vals)
 mydata.cor <- cor(extracted_points, method = 'spearman', use = 'complete.obs')
 corrplot(mydata.cor)
 
-#iteratively remove correlated (normally cut-off is 0.8)
-hc <- findCorrelation(mydata.cor, cutoff = 0.8)
-hc = sort(hc)
-predictors_final_list = extracted_points[,-c(hc)]
+#really cor picking 1
 
-#now we have our list and we will cut out from the raster stack
+predictors_final <- predictors[[1]]
+plot(predictors_final)
 
-predictors_final <- subset(predictors, names(predictors_final_list))
-#plot(predictors_final)
-
-#Note: annual_flow, Dam_BldCap, frag3to10, and TotDASqKm were cut out
 
 #project into USA Contiguous Albers Equal Area Conic
-annu_velo_final <- projectRaster(predictors_final$annu_velo, crs = projection)
-Aug_temp_avg_final <- projectRaster(predictors_final$Aug_temp_avg, crs=projection)
-brockdepmin_final <- projectRaster(predictors_final$brockdepmin, crs = projection)
-Dam_CompSz_final <- projectRaster(predictors_final$Dam_CompSz, crs=projection)
-fraggt10_final <- projectRaster(predictors_final$fraggt10, crs=projection)
-ksat_avg_final <- projectRaster(predictors_final$ksat_avg, crs = projection)
-LandUse_final <- projectRaster(predictors_final$LandUse, crs=projection)
-MAXELEVSMO_final <- projectRaster(predictors_final$MAXELEVSMO, crs = projection)
-slope_final <- projectRaster(predictors_final$slope, crs=projection)
-VC_final <- projectRaster(predictors_final$Valley_Con, crs=projection)
+Dam_BldCa_final  <- projectRaster(predictors_final, crs = projection)
 
 #once done cropping and reprojecting put into raster stack
-predictors_maxent <- stack(annu_velo_final,Aug_temp_avg_final,brockdepmin_final,Dam_CompSz_final,fraggt10_final,ksat_avg_final,LandUse_final,MAXELEVSMO_final,slope_final,VC_final)
+predictors_maxent <- stack(Dam_BldCa_final)
 
 
 #next up is to remove any points with NA predictor variable values.
@@ -88,7 +72,7 @@ rast_values <- raster::extract(predictors_maxent, pointdata)
 pointdata <- as.data.frame(pointdata)
 pointdata <- cbind(pointdata,rast_values)
 
-#625 points need to be dropped
+#17 points need to be dropped
 sum(!complete.cases(pointdata))
 
 pointdata <- pointdata[complete.cases(pointdata), ]
@@ -97,7 +81,7 @@ pointdata <- pointdata[complete.cases(pointdata), ]
 pointdata <- pointdata %>% dplyr::select('LON','LAT')
 
 #find explaination of these values in the help file of the maxent .jar file
-model <- maxent(x=predictors_maxent, p=pointdata, factors='Valley_Con', args=c(
+model <- maxent(x=predictors_maxent, p=pointdata, args=c(
   'maximumbackground=10000',
   'defaultprevalence=0.5',
   'betamultiplier=1',
@@ -110,11 +94,11 @@ model <- maxent(x=predictors_maxent, p=pointdata, factors='Valley_Con', args=c(
   'hinge=true',
   'threads=4',
   'responsecurves=true',
-  'jackknife=true',
+  'jackknife=false',
   'askoverwrite=false',
   'replicates=10',
   'replicatetype=crossvalidate'),
-  path = './outputs/maxent_outputs_all')
+  path = './outputs/maxent_outputs_OnlyBeaver')
 
 #threads = 4 was used to match 4 core of my home computer
 #defaultprevalence=0.5 used but unsure if correct
@@ -124,21 +108,21 @@ model
 #determine which model had the best AUC, note that first in sequence is 0
 colnames(as.data.frame(model@results))[max.col(as.data.frame(model@results)[c("Test.AUC"),],ties.method="first")]
 
-#species_5 model is best
-model_5 <- model@models[[6]]
+#species_8 model is best
+model_8 <- model@models[[9]]
 
 #plots variable contribution
-plot(model_5)
+plot(model_8)
 
 #shows response curves
-response(model_5)
+response(model_8)
 
 #how to predict distribution across the landscape (not sure if i need this to answer my question)
-predict_all <- predict(predictors_maxent, model_5, progress = 'text')
+predict_all <- predict(predictors_maxent, model_8, progress = 'text')
 
 #view map
 plot(predict_all)
 
 #write the maxent model and the raster
-saveRDS(model, file = "./outputs/model_all.RDS")
-saveRDS(predict_all, file = './outputs/model_all_predict.RDS')
+saveRDS(model, file = "./outputs/model_onlybeaver.RDS")
+saveRDS(predict_all, file = './outputs/model_onlybeaver_predict.RDS')
