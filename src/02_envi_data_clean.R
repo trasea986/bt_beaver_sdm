@@ -1,3 +1,4 @@
+#load packages
 library(tidyverse)
 library(maptools)
 library(rgbif)
@@ -11,7 +12,6 @@ library(patchwork)
 library(RSQLite)
 library(maps)
 library(raster)
-#load packages
 
 #the projection will be USA Contiguous Albers Equal Area Conic
 projection <- "ESRI:102003"

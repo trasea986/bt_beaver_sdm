@@ -11,10 +11,15 @@ library(patchwork)
 library(RSQLite)
 library(maps)
 library(raster)
-#load packages
+library(ENMeval)
+library(ecospat)
+library(rangeModelMetadata)
 
 #the projection will be USA Contiguous Albers Equal Area Conic
 projection <- "ESRI:102003"
+
+
+# brook trout -------------------------------------------------------------
 
 #Bring in the final brook trout point file
 pointdata <- read.csv("./data/BTrout_df_final4500.csv")
@@ -88,13 +93,36 @@ rast_values <- raster::extract(predictors_maxent, pointdata)
 pointdata <- as.data.frame(pointdata)
 pointdata <- cbind(pointdata,rast_values)
 
-#625 points need to be dropped
+#brockdepmin and ksat avg are NA for most points, so removing. They are both soil related
+
+pointdata <- pointdata[,-c(1,6,9)]
+
+#625 points need to be dropped if you keep those two. this looks better
 sum(!complete.cases(pointdata))
 
 pointdata <- pointdata[complete.cases(pointdata), ]
 
 #maxent only wants points
 pointdata <- pointdata %>% dplyr::select('LON','LAT')
+
+#remove these two from the predictors_maxent stack
+predictors_maxent <- predictors_maxent[[-c(3, 6)]]
+
+
+#Next is to run ENMeval to check regularization multiplier values
+#set up model list to test
+tune_args_list  <- list(fc = c("L","Q","LQ","LQH", "H"), rm = 1:5)
+
+#running enmeval independently to make watching progress easier
+enmeval_results <- ENMevaluate(pointdata, predictors_maxent, n.bg=10000, tune.args = tune_args_list, partitions='checkerboard2', algorithm='maxnet')
+
+eval <- eval.results(enmeval_results)
+
+write.csv(eval, "./outputs/brook_trout_enmeval.csv")
+
+#LQH rm value of 1 was the best
+
+#model 4 is the best
 
 #find explaination of these values in the help file of the maxent .jar file
 model <- maxent(x=predictors_maxent, p=pointdata, factors='Valley_Con', args=c(
@@ -124,17 +152,17 @@ model
 #determine which model had the best AUC, note that first in sequence is 0
 colnames(as.data.frame(model@results))[max.col(as.data.frame(model@results)[c("Test.AUC"),],ties.method="first")]
 
-#species_5 model is best
-model_5 <- model@models[[6]]
+#species_6 model is best
+model_6 <- model@models[[7]]
 
 #plots variable contribution
-plot(model_5)
+plot(model_6)
 
 #shows response curves
-response(model_5)
+response(model_6)
 
 #how to predict distribution across the landscape (not sure if i need this to answer my question)
-predict_all <- predict(predictors_maxent, model_5, progress = 'text')
+predict_all <- predict(predictors_maxent, model_6, progress = 'text')
 
 #view map
 plot(predict_all)
@@ -142,3 +170,83 @@ plot(predict_all)
 #write the maxent model and the raster
 saveRDS(model, file = "./outputs/model_all.RDS")
 saveRDS(predict_all, file = './outputs/model_all_predict.RDS')
+
+
+
+# bull trout --------------------------------------------------------------
+
+#Now to do again with bull trout
+#Bring in the final brook trout point file
+pointdata <- read.csv("./data/BullTrout_df_final4500.csv")
+
+#next up is to remove any points with NA predictor variable values.
+coordinates(pointdata) <- ~NewLong+NewLat
+rast_values <- raster::extract(predictors_maxent, pointdata)
+pointdata <- as.data.frame(pointdata)
+pointdata <- cbind(pointdata,rast_values)
+
+#625 points need to be dropped if you keep those two. this looks better
+sum(!complete.cases(pointdata))
+
+pointdata <- pointdata[complete.cases(pointdata), ]
+
+#maxent only wants points
+pointdata <- pointdata %>% dplyr::select('NewLong','NewLat')
+
+#Next is to run ENMeval to check regularization multiplier values
+#set up model list to test
+tune_args_list  <- list(fc = c("L","Q","LQ","LQH", "H"), rm = 1:5)
+
+#running enmeval independently to make watching progress easier
+enmeval_results <- ENMevaluate(pointdata, predictors_maxent, n.bg=10000, tune.args = tune_args_list, partitions='checkerboard2', algorithm='maxnet')
+
+eval <- eval.results(enmeval_results)
+
+write.csv(eval, "./outputs/bull_trout_enmeval.csv")
+
+#find explaination of these values in the help file of the maxent .jar file
+model <- maxent(x=predictors_maxent, p=pointdata, factors='Valley_Con', args=c(
+  'maximumbackground=10000',
+  'defaultprevalence=0.5',
+  'betamultiplier=1',
+  'plots=true',
+  'pictures=true',
+  'linear=true',
+  'quadratic=true',
+  'product=false',
+  'threshold=false',
+  'hinge=true',
+  'threads=4',
+  'responsecurves=true',
+  'jackknife=true',
+  'askoverwrite=false',
+  'replicates=10',
+  'replicatetype=crossvalidate'),
+  path = './outputs/maxent_outputs_all_bull')
+
+#threads = 4 was used to match 4 core of my home computer
+#defaultprevalence=0.5 used but unsure if correct
+
+model
+
+#determine which model had the best AUC, note that first in sequence is 0
+colnames(as.data.frame(model@results))[max.col(as.data.frame(model@results)[c("Test.AUC"),],ties.method="first")]
+
+#species_8 model is best
+model_8 <- model@models[[9]]
+
+#plots variable contribution
+plot(model_8)
+
+#shows response curves
+response(model_8)
+
+#how to predict distribution across the landscape (not sure if i need this to answer my question)
+predict_all <- predict(predictors_maxent, model_8, progress = 'text')
+
+#view map
+plot(predict_all)
+
+#write the maxent model and the raster
+saveRDS(model, file = "./outputs/model_all_bull.RDS")
+saveRDS(predict_all, file = './outputs/model_all_predict_bull.RDS')

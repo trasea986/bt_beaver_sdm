@@ -90,10 +90,20 @@ pointdata <- cbind(pointdata,rast_values)
 #625 points need to be dropped
 sum(!complete.cases(pointdata))
 
+#brockdepmin and ksat avg are NA for most points, so removing. They are both soil related
+
+pointdata <- pointdata[,-c(1,6,9)]
+
+#27 points need to be dropped if you keep those two. this looks better
+sum(!complete.cases(pointdata))
+
 pointdata <- pointdata[complete.cases(pointdata), ]
 
 #maxent only wants points
 pointdata <- pointdata %>% dplyr::select('LON','LAT')
+
+#remove these two from the predictors_maxent stack
+predictors_maxent <- predictors_maxent[[-c(3, 6)]]
 
 #find explaination of these values in the help file of the maxent .jar file
 model <- maxent(x=predictors_maxent, p=pointdata, factors='Valley_Con', args=c(
@@ -123,17 +133,17 @@ model
 #determine which model had the best AUC, note that first in sequence is 0
 colnames(as.data.frame(model@results))[max.col(as.data.frame(model@results)[c("Test.AUC"),],ties.method="first")]
 
-#species_5 model is best
-model_5 <- model@models[[6]]
+#species_6 model is best
+model_6 <- model@models[[7]]
 
 #plots variable contribution
-plot(model_5)
+plot(model_6)
 
 #shows response curves
-response(model_5)
+response(model_6)
 
 #how to predict distribution across the landscape (not sure if i need this to answer my question)
-predict_all <- predict(predictors_maxent, model_5, progress = 'text')
+predict_all <- predict(predictors_maxent, model_6, progress = 'text')
 
 #view map
 plot(predict_all)
@@ -141,3 +151,71 @@ plot(predict_all)
 #write the maxent model and the raster
 saveRDS(model, file = "./outputs/model_nobeaver.RDS")
 saveRDS(predict_all, file = './outputs/model_nobeaver_predict.RDS')
+
+
+
+# bull trout --------------------------------------------------------------
+
+#Now to do again with bull trout
+#Bring in the final brook trout point file
+pointdata <- read.csv("./data/BullTrout_df_final4500.csv")
+
+#next up is to remove any points with NA predictor variable values.
+coordinates(pointdata) <- ~NewLong+NewLat
+rast_values <- raster::extract(predictors_maxent, pointdata)
+pointdata <- as.data.frame(pointdata)
+pointdata <- cbind(pointdata,rast_values)
+
+#4 points need to be dropped if you keep those two. this looks better
+sum(!complete.cases(pointdata))
+
+pointdata <- pointdata[complete.cases(pointdata), ]
+
+#maxent only wants points
+pointdata <- pointdata %>% dplyr::select('NewLong','NewLat')
+
+#find explaination of these values in the help file of the maxent .jar file
+model <- maxent(x=predictors_maxent, p=pointdata, factors='Valley_Con', args=c(
+  'maximumbackground=10000',
+  'defaultprevalence=0.5',
+  'betamultiplier=1',
+  'plots=true',
+  'pictures=true',
+  'linear=true',
+  'quadratic=true',
+  'product=false',
+  'threshold=false',
+  'hinge=true',
+  'threads=4',
+  'responsecurves=true',
+  'jackknife=true',
+  'askoverwrite=false',
+  'replicates=10',
+  'replicatetype=crossvalidate'),
+  path = './outputs/maxent_outputs_NoBeaver_bull')
+
+#threads = 4 was used to match 4 core of my home computer
+#defaultprevalence=0.5 used but unsure if correct
+
+model
+
+#determine which model had the best AUC, note that first in sequence is 0
+colnames(as.data.frame(model@results))[max.col(as.data.frame(model@results)[c("Test.AUC"),],ties.method="first")]
+
+#species_8 model is best
+model_8 <- model@models[[9]]
+
+#plots variable contribution
+plot(model_8)
+
+#shows response curves
+response(model_8)
+
+#how to predict distribution across the landscape (not sure if i need this to answer my question)
+predict_all <- predict(predictors_maxent, model_8, progress = 'text')
+
+#view map
+plot(predict_all)
+
+saveRDS(model, file = "./outputs/model_nobeaver_bull.RDS")
+saveRDS(predict_all, file = './outputs/model_nobeaver_predict_bull.RDS')

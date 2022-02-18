@@ -65,14 +65,13 @@ Dam_BldCa_final  <- projectRaster(predictors_final, crs = projection)
 #once done cropping and reprojecting put into raster stack
 predictors_maxent <- stack(Dam_BldCa_final)
 
-
 #next up is to remove any points with NA predictor variable values.
 coordinates(pointdata) <- ~LON+LAT
 rast_values <- raster::extract(predictors_maxent, pointdata)
 pointdata <- as.data.frame(pointdata)
 pointdata <- cbind(pointdata,rast_values)
 
-#17 points need to be dropped
+#17 points need to be dropped if you keep those two. this looks better
 sum(!complete.cases(pointdata))
 
 pointdata <- pointdata[complete.cases(pointdata), ]
@@ -126,3 +125,72 @@ plot(predict_all)
 #write the maxent model and the raster
 saveRDS(model, file = "./outputs/model_onlybeaver.RDS")
 saveRDS(predict_all, file = './outputs/model_onlybeaver_predict.RDS')
+
+
+
+# bull trout --------------------------------------------------------------
+
+#Now to do again with bull trout
+#Bring in the final brook trout point file
+pointdata <- read.csv("./data/BullTrout_df_final4500.csv")
+
+#next up is to remove any points with NA predictor variable values.
+coordinates(pointdata) <- ~NewLong+NewLat
+rast_values <- raster::extract(predictors_maxent, pointdata)
+pointdata <- as.data.frame(pointdata)
+pointdata <- cbind(pointdata,rast_values)
+
+#2 points need to be dropped if you keep those two. this looks better
+sum(!complete.cases(pointdata))
+
+pointdata <- pointdata[complete.cases(pointdata), ]
+
+#maxent only wants points
+pointdata <- pointdata %>% dplyr::select('NewLong','NewLat')
+
+#find explaination of these values in the help file of the maxent .jar file
+model <- maxent(x=predictors_maxent, p=pointdata, args=c(
+  'maximumbackground=10000',
+  'defaultprevalence=0.5',
+  'betamultiplier=1',
+  'plots=true',
+  'pictures=true',
+  'linear=true',
+  'quadratic=true',
+  'product=false',
+  'threshold=false',
+  'hinge=true',
+  'threads=4',
+  'responsecurves=true',
+  'jackknife=false',
+  'askoverwrite=false',
+  'replicates=10',
+  'replicatetype=crossvalidate'),
+  path = './outputs/maxent_outputs_OnlyBeaver_bull')
+
+#threads = 4 was used to match 4 core of my home computer
+#defaultprevalence=0.5 used but unsure if correct
+
+model
+
+#determine which model had the best AUC, note that first in sequence is 0
+colnames(as.data.frame(model@results))[max.col(as.data.frame(model@results)[c("Test.AUC"),],ties.method="first")]
+
+#species_2 model is best
+model_2 <- model@models[[3]]
+
+#plots variable contribution
+plot(model_2)
+
+#shows response curves
+response(model_2)
+
+#how to predict distribution across the landscape (not sure if i need this to answer my question)
+predict_all <- predict(predictors_maxent, model_2, progress = 'text')
+
+#view map
+plot(predict_all)
+
+#write the maxent model and the raster
+saveRDS(model, file = "./outputs/model_onlybeaver_bull.RDS")
+saveRDS(predict_all, file = './outputs/model_onlybeaver_predict_bull.RDS')
