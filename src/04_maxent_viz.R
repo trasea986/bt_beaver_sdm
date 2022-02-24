@@ -17,6 +17,8 @@ library(rnaturalearth)
 library(sf)
 library(cowplot)
 
+projection <- "ESRI:102003"
+
 #load model and prediction rasters
 climate_model <- readRDS(file = "./outputs/model_nobeaver.RDS")
 climate_raster <- readRDS(file = './outputs/model_nobeaver_predict.RDS')
@@ -194,6 +196,7 @@ combo_plot <- ggplot() +
   xlab("Longitude") +
   ylab("Latitude") +
   ggtitle("Brook Trout") +
+  coord_fixed()+
   theme_classic(base_size = 16) + theme (legend.position = "none")
 
 combo_raster_bull <- projectRaster(combo_raster_bull, crs = area_poly)
@@ -210,6 +213,7 @@ combo_plot_bull <- ggplot() +
   xlab("Longitude") +
   ylab("Latitude") +
   ggtitle("Bull Trout") +
+  coord_fixed()+
   theme_classic(base_size = 16) + theme (legend.position = "none")
 
 legend <- get_legend(
@@ -225,6 +229,72 @@ combo_plot_final <- plot_grid(combo_plot, combo_plot_bull, legend, ncol = 3, rel
 
 
 ggsave('./outputs/combo_plot.tiff', plot = combo_plot_final, height = 8, width = 11, units = "in")
+
+
+
+#ENM values + points used in the model
+#need to turn points to lat/lon
+brook_points <- read.csv("./data/BTrout_df_final4500.csv")
+bull_points <- read.csv("./data/BullTrout_df_final4500.csv")
+coordinates(brook_points) <- ~LON+LAT
+projection(brook_points) <- CRS(projection)
+#reproject to the CRS of raster image
+brook_points <- spTransform(brook_points, crs(combo_raster))
+brook_points <- as.data.frame(brook_points)
+
+coordinates(bull_points) <- ~NewLong+NewLat
+projection(bull_points) <- CRS(projection)
+#reproject to the CRS of raster image
+bull_points <- spTransform(bull_points, crs(combo_raster))
+bull_points <- as.data.frame(bull_points)
+
+combo_plot <- ggplot() + 
+  geom_raster(data = combo_df, aes(x = x, y = y, fill = layer)) + 
+  scale_fill_gradient(name = "ENM Value", low = "grey",high = "darkblue",
+                      guide = "colourbar",
+                      aesthetics = "fill",
+                      na.value = "white") +
+  geom_polygon(data = county_sub, mapping = aes(x = long, y = lat, group = group), fill = NA, color = "black") +
+  geom_point(data = brook_points, aes(x = LON, y = LAT), color = "yellow", shape = 1) +
+  geom_polygon(data = area_poly, mapping = aes(x = long, y = lat, group = group), color = "black", fill = NA) + #black lines for the states
+  xlab("Longitude") +
+  ylab("Latitude") +
+  ggtitle("Brook Trout") +
+  coord_fixed()+
+  theme_classic(base_size = 16) + theme (legend.position = "none")
+
+#one bull trout point is likely wrong
+bull_points <- subset(bull_points, NewLong < max(bull_points1$NewLong))
+
+combo_plot_bull <- ggplot() + 
+  geom_raster(data = combo_df_bull, aes(x = x, y = y, fill = layer)) + 
+  scale_fill_gradient(name = "ENM Value", low = "grey",high = "darkblue",
+                      guide = "colourbar",
+                      aesthetics = "fill",
+                      na.value = "white") +
+  geom_point(data = bull_points, aes(x = NewLong, y = NewLat), color = "yellow", shape = 1) +
+  geom_polygon(data = county_sub, mapping = aes(x = long, y = lat, group = group), fill = NA, color = "black") + #darkgrey county lines
+  geom_polygon(data = area_poly, mapping = aes(x = long, y = lat, group = group), color = "black", fill = NA) + #black lines for the states
+  xlab("Longitude") +
+  ylab("Latitude") +
+  ggtitle("Bull Trout") +
+  coord_fixed()+
+  theme_classic(base_size = 16) + theme (legend.position = "none")
+
+legend <- get_legend(
+  combo_plot + 
+    scale_fill_gradient(name = "ENM Value", low = "grey",high = "darkblue",
+                        guide = "colourbar",
+                        aesthetics = "fill",
+                        na.value = "white") +
+    guides(color = guide_legend(nrow = 1)) +
+    theme(legend.position = "right"))
+
+combo_plot_final <- plot_grid(combo_plot, combo_plot_bull, legend, ncol = 3, rel_widths = c(1,1,.25))
+
+
+ggsave('./outputs/combo_plot_points.tiff', plot = combo_plot_final, height = 8, width = 11, units = "in")
+
 
 
 #calculate differences when you add in beaver
@@ -246,6 +316,7 @@ dif_plot <- ggplot() +
   xlab("Longitude") +
   ylab("Latitude") +
   ggtitle("Brook Trout") +
+  coord_fixed()+
   theme_classic(base_size = 16) + theme (legend.position = "none")
 
 dif_plot_bull <- ggplot() + 
@@ -259,6 +330,7 @@ dif_plot_bull <- ggplot() +
   xlab("Longitude") +
   ylab("Latitude") +
   ggtitle("Bull Trout") +
+  coord_fixed()+
   theme_classic(base_size = 16) + theme (legend.position = "none")
 
 legend <- get_legend(
@@ -274,3 +346,48 @@ dif_plot_final <- plot_grid(dif_plot, dif_plot_bull, legend, ncol = 3, rel_width
 
 
 ggsave('./outputs/dif_plot.tiff', plot = dif_plot_final, height = 8, width = 12, units = "in")
+
+#plot with the points
+dif_plot <- ggplot() + 
+  geom_raster(data = dif_df, aes(x = x, y = y, fill = layer)) + 
+  scale_fill_gradient2(name = "ENM Change", low = "darkred",high = "darkblue",
+                       guide = "colourbar",
+                       aesthetics = "fill",
+                       na.value = "white", midpoint = 0, mid = "white") +
+  geom_point(data = brook_points, aes(x = LON, y = LAT), color = "yellow", shape = 1) +
+  geom_polygon(data = county_sub, mapping = aes(x = long, y = lat, group = group), fill = NA, color = "black") + #darkgrey county lines
+  geom_polygon(data = area_poly, mapping = aes(x = long, y = lat, group = group), color = "black", fill = NA) + #black lines for the states
+  xlab("Longitude") +
+  ylab("Latitude") +
+  ggtitle("Brook Trout") +
+  coord_fixed()+
+  theme_classic(base_size = 16) + theme (legend.position = "none")
+
+dif_plot_bull <- ggplot() + 
+  geom_raster(data = dif_df_bull, aes(x = x, y = y, fill = layer)) + 
+  scale_fill_gradient2(name = "ENM Change", low = "darkred",high = "darkblue",
+                       guide = "colourbar",
+                       aesthetics = "fill",
+                       na.value = "white", midpoint = 0, mid = "white") +
+  geom_point(data = bull_points, aes(x = NewLong, y = NewLat), color = "yellow", shape = 1) +
+  geom_polygon(data = county_sub, mapping = aes(x = long, y = lat, group = group), fill = NA, color = "black") + #darkgrey county lines
+  geom_polygon(data = area_poly, mapping = aes(x = long, y = lat, group = group), color = "black", fill = NA) + #black lines for the states
+  xlab("Longitude") +
+  ylab("Latitude") +
+  ggtitle("Bull Trout") +
+  coord_fixed()+
+  theme_classic(base_size = 16) + theme (legend.position = "none")
+
+legend <- get_legend(
+  dif_plot + 
+    scale_fill_gradient2(name = "ENM Change", low = "darkred",high = "darkblue",
+                         guide = "colourbar",
+                         aesthetics = "fill",
+                         na.value = "white", midpoint = 0, mid = "white") +
+    guides(color = guide_legend(nrow = 1)) +
+    theme(legend.position = "right"))
+
+dif_plot_final <- plot_grid(dif_plot, dif_plot_bull, legend, ncol = 3, rel_widths = c(1,1,.25))
+
+
+ggsave('./outputs/dif_plot_points.tiff', plot = dif_plot_final, height = 8, width = 12, units = "in")
